@@ -1,5 +1,5 @@
 """
--*- reads, formats, & pickles image data -*-
+-*- defines ResNet model architecture -*-
 
 @author:    alexjaniak
 @date:      6/3/20
