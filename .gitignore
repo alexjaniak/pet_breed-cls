@@ -1,0 +1,13 @@
+# -*-  macOS -*- #
+*.DS_Store
+.AppleDouble
+.LSOverride
+
+# -*-  python  -*- #
+__pycache__
+
+# -*-  pyenv  -*- #
+.python-version
+
+# -*- project -*- # 
+pets
