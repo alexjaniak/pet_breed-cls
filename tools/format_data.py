@@ -20,13 +20,12 @@ to run module issue the command:
 # TODO: only include necessary inputs i.e from numpy import array
 import os
 import argparse
-from tqdm import tqdm
+from tqdm import tqdm # progress bar
+import confuse # yaml parser
 
 from PIL import Image
 import numpy as np 
 import pandas as pd
-
-from config import data_cfg
 
 # TODO: include timer for non-progress bar processing
 # @main
@@ -38,6 +37,10 @@ def format_data(image_dir, save_path):
     :param save_path: the save path
     :return: returns nothing
     """
+
+    # read config file
+    config = confuse.Configuration('ml_skeleton-cls')
+
     # generate data data frame 
     data = pd.DataFrame(pull_raw_image_data(image_dir))
     data["formated_fnames"] = format_file_names(data.file_names)
@@ -45,7 +48,8 @@ def format_data(image_dir, save_path):
 
     # shuffle & split data
     data = data.sample(frac=1, random_state=42).reset_index(drop=True) # shuffle
-    idx = int(np.floor(data_cfg["TRAIN_SPLIT"]*data.shape[0])) # split index
+    train_split = config['data']['train_split'].get()
+    idx = int(np.floor(train_split*data.shape[0])) # split index
     test, train = data.iloc[:idx],data.iloc[idx:] # split data into training & test
  
     # pickle data frames

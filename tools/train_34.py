@@ -14,9 +14,9 @@ to run module issue the command:
 """
 
 # imports
-# TODO: only import necessities
-import argparse
-from tqdm import tqdm
+import argparse 
+from tqdm import tqdm # progress bars
+import confuse # yaml parser
 
 from tensorflow import image as tf_image
 from tensorflow import keras
@@ -24,7 +24,7 @@ from pandas import DataFrame, read_pickle
 import matplotlib.pyplot as plt
 
 from ResNet import resnet34
-from config import data_cfg, model_cfg
+
 
 def main(train_path, test_path, save_path):
     """
@@ -35,6 +35,10 @@ def main(train_path, test_path, save_path):
     :param save_path: the save path
     :return: returns nothing
     """
+
+    # read config file
+    config = confuse.Configuration('ml_skeleton-cls')
+
     # unpickle training data
     print("[INFO] Loading data ...")
     train = read_pickle(train_path)
@@ -46,14 +50,17 @@ def main(train_path, test_path, save_path):
 
     ## init model
     # TODO: imput config into Adam optimizer
-    rn34 = resnet34(output_nodes = data_cfg["CATEGORICAL_VARIABLES"])
+    rn34 = resnet34(output_nodes = config['data']['pets']['labels'].get())
     rn34.compile(loss=keras.losses.sparse_categorical_crossentropy,
                  optimizer=keras.optimizers.Adam(),
                  metrics=keras.metrics.sparse_categorical_accuracy)
 
     ## training
     # TODO: implement early stopping & model checkpoints
-    history = rn34.fit(resized_train_images, train.labels, epochs=model_cfg["EPOCHS"], validation_split=model_cfg["VALIDATION_SPLIT"])
+    history = rn34.fit(resized_train_images,
+                       train.labels,
+                       epochs=config['model']['epochs'].get(),
+                       validation_split=config['model']['val_split'].get())
     plot_history(history)
 
     # test model
@@ -102,6 +109,7 @@ def init_args():
     parser.add_argument('--test_path', type=str, help='The pickled test data path')
     parser.add_argument('--save_path', type=str, help='The model checkpoint')
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     # executes when train_34.py is run directly 
