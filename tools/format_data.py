@@ -1,116 +1,50 @@
 """
--*- reads, formats, & pickles image data -*-
+-*- functions for formating data -*-
 
 @author:    alexjaniak
-@date:      6/2/20
+@date:      7/19/21
 @file:      format_data.py  
-
-to run module issue the command: 
-
-    python format_data.py --image_dir PATH/TO/THE/IMAGES_DIR --save_path PATH/TO/SAVE_PATH
-    
-    output:
-        train.pkl & test.pkl -> pickled pandas DataFrames saved at PATH/TO/SAVE_PATH:
-            images: (-1, height, width, channels)
-            labels: (-1, 1) -> int
-            file_names: (-1, 1) -> 'file_name123.jpg'  
-            formated_fnames: (-1, 1) -> 'file name'
 """
-# imports 
-# TODO: only include necessary inputs i.e from numpy import array
-import os
-import argparse
-from tqdm import tqdm # progress bar
-import confuse # yaml parser
 
-from PIL import Image
+import os 
 import numpy as np 
-import pandas as pd
+from PIL import Image 
+from tensorflow import image as tf_image
 
-# TODO: include timer for non-progress bar processing
-# @main
-def format_data(image_dir, save_path):
+# TODO: real expression
+def format_file_name(file_name):
     """
-    reads, formats, & pickles image data
+    formats file name from 'file_name123.jpg' to 'file name'
 
-    :param image_dir: the image directory
-    :param save_path: the save path
-    :return: returns nothing
+    :param files: file name string
+    :return: formatted file name string
     """
 
-    # read config file
-    config = confuse.Configuration('ml_skeleton-cls')
+    formated_file_name = os.path.splitext(file_name)[0].replace("_", " ") # file_name123.jpg -> file name123
+    formated_file_name = ''.join(c for c in formated_file_name if not c.isdigit()) # only letters
+    return formated_file_name.rstrip() # remove white space
 
-    # generate data data frame 
-    data = pd.DataFrame(pull_raw_image_data(image_dir))
-    data["formated_fnames"] = format_file_names(data.file_names)
-    data["labels"] = encode_labels(data.formated_fnames)
-
-    # shuffle & split data
-    data = data.sample(frac=1, random_state=42).reset_index(drop=True) # shuffle
-    train_split = config['data']['train_split'].get()
-    idx = int(np.floor(train_split*data.shape[0])) # split index
-    test, train = data.iloc[:idx],data.iloc[idx:] # split data into training & test
- 
-    # pickle data frames
-    train_file_path = os.path.join(save_path, "train.pkl")
-    test_file_path = os.path.join(save_path,"test.pkl")
-
-    print("[INFO] Pickling to {} ...".format(train_file_path))
-    train.to_pickle(train_file_path)
-    print("[INFO] Pickling to {} ...".format(test_file_path))
-    test.to_pickle(test_file_path)
- 
-#TODO: use glob.glob()
-def pull_raw_image_data(image_dir):
+def get_image_vals(file_path):
     """
-    reads images from image_dir
+    returns pixel image vals 
 
-    :param image_dir: the image directory
-    :return: dict containing image pixel vals and file names
+    :param image: file path
+    :return: numpy array of pixel vals
     """
-    imgs, fnames = [], []
-    for fname in tqdm(os.listdir(image_dir), desc="Loading Files"): # progress bar
-        split = os.path.splitext(fname) # splits file_name.ext to [file_name, ext]
-        if split[1].lower() == '.jpg': # only opens .jpg files
-            with Image.open(os.path.join(image_dir, fname)) as img:
-                imgs.append(get_image_vals(img))
-            fnames.append(fname) 
-    return {'images':imgs, 'file_names':fnames}
 
-#TODO: use real expressions
-def format_file_names(file_names):
-    """
-    formats file names from 'file_name123.jpg' to 'file name'
+    with Image.open(file_path) as image:
+        image_vals = image.get_data().reshape(image.size[0], image.size[1])
+        return np.array(image_vals, -1)
 
-    :param files: list of file names 
-    :return: list of formated file names
-    """
-    formated_fnames = []
-    for f in tqdm(file_names, desc="Formating Files"): # progress bar
-        formated = os.path.splitext(f)[0].replace("_", " ")
-        formated = ''.join(c for c in formated if not c.isdigit())
-        formated_fnames.append(formated.rstrip())
-    
-    return formated_fnames
-
-def get_image_vals(image):
-    """
-    converts PIL image to array of pixel vals
-
-    :param image: PIL image object
-    :return: array of pixel vals
-    """
-    return np.array(image.getdata()).reshape(image.size[0], image.size[1], -1)
 
 def encode_labels(labels):
     """
     creates labels for categorical variables using label encoding
 
     :param labels: list of categorical labels 
-    :return: list of encoded labels
+    :return: list of encoded labels & key
     """
-    print("[INFO] Encoding Labels ...")
+    
     # get list of categorical vars
     cat_vars = []
     for i in labels:
@@ -123,19 +57,20 @@ def encode_labels(labels):
         cat_key[cat_vars[i]] = i
 
     labels = [cat_key[i] for i in labels] # encode labels
-    return labels
+    return labels, cat_key
 
-def init_args():
+
+# TODO: try cut and resize tf
+# TODO: add as preprocessing layer
+def resize_images(images, shape=(224,224)):
     """
-    initializes command line args
+    resizes list of images
 
-    :return: args
+    :param images: pixel vals of images
+    :param shape: shape images are resized to
+    :return: list of resized images
     """
-    parser = argparse.ArgumentParser(description="Formats image data")
-    parser.add_argument('--image_dir', type=str, help='The image dir')
-    parser.add_argument('--save_path', type=str, help='The save path')
-    return parser.parse_args()
-
-if __name__ == "__main__":
-    args = init_args() #init 
-    format_data(args.image_dir, args.save_path) # calls main func
+    resized_images = [] 
+    for image in images:
+        resized_images.append(tf_image.resize(image, shape)) # resizes images (streches)
+    return resized_images

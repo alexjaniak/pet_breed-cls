@@ -1,7 +1,7 @@
 """
 -*- trains & tests a ResNet34 model -*-
 @author:    alexjaniak
-@date:      6/2/20
+@date:      7/20/21
 @file:      train_34.py  
 
 to run module issue the command: 
@@ -13,63 +13,74 @@ to run module issue the command:
         test -> model test performance
 """
 
-# imports
+import format_data as fd 
 import argparse 
-from tqdm import tqdm # progress bars
-import confuse # yaml parser
-
-from tensorflow import image as tf_image
-from tensorflow import keras
-from pandas import DataFrame, read_pickle  
-import matplotlib.pyplot as plt
-
+import confuse
+import glob
+import os
 from ResNet import resnet34
+import pandas as pd
+import matplotlib.pyplot as plt 
+from sklearn.model_selection import train_test_split
 
-
-def main(train_path, test_path, save_path):
+def main(image_dir, save_path, plot_history = True):
     """
-    trains & tests a ResNet-34 model 
+    trains & evaluates a ResNet-34 model
 
-    :param train_path: the pickled training data path
-    :param test_path: the pickled testing data path
-    :param save_path: the save path
+    :param image_dir: /PATH/TO/IMAGE/DIR
+    :param save_path: /PATH/TO/MODEL/DIR
+    :param plot_history: bool for plotting training metrics
     :return: returns nothing
     """
+    ## load data
+    file_paths = glob.glob(os.path.join(image_dir,'*.jpg')) # gets file paths from dir
+    data, label_key = read_data(file_paths) # read data from file paths
+    data.images = fd.resize_images(data.images, shape=(224,224)) # resize images
 
-    # read config file
-    config = confuse.Configuration('ml_skeleton-cls')
+    # shuffle & split
+    X_train, X_test, y_train, y_test = train_test_split(data.images,
+                                                        data.labels,
+                                                        train_split = config['data']['train_split'], 
+                                                        random_state=42)
 
-    # unpickle training data
-    print("[INFO] Loading data ...")
-    train = read_pickle(train_path)
-    test = read_pickle(test_path)
+    ## train model
+    rn34, history = train_rn34(X_train, y_train)
 
-    # train model
-    print("[INFO] Training Model")
-    resized_train_images = resize_images(train.images)
+    # plot training metrics 
+    if plot_history: plot_history(history)
 
+    ## eval model
+    rn34.evaluate(X_test, y_test)
+
+    #TODO: add better save names
+    ## save model
+    rn34.save(save_path)
+    
+
+
+def train_rn34(images, labels):
+    """
+    trains a ResNet-34 model
+
+    :param images: list of resized image values
+    :param labels: list of image labels
+    :returns: trained keras ResNet34 model
+    """
     ## init model
     # TODO: imput config into Adam optimizer
-    rn34 = resnet34(output_nodes = config['data']['pets']['labels'].get())
+    rn34 = resnet34(output_nodes = config['data']['pets']['labels'])
     rn34.compile(loss=keras.losses.sparse_categorical_crossentropy,
                  optimizer=keras.optimizers.Adam(),
                  metrics=keras.metrics.sparse_categorical_accuracy)
 
     ## training
     # TODO: implement early stopping & model checkpoints
-    history = rn34.fit(resized_train_images,
-                       train.labels,
-                       epochs=config['model']['epochs'].get(),
-                       validation_split=config['model']['val_split'].get())
-    plot_history(history)
+    history = rn34.fit(images,
+                       labels,
+                       epochs=config['model']['epochs'],
+                       validation_split=config['model']['val_split'])
 
-    # test model
-    print("[INFO] Evaluating Model")
-    resized_test_images = resize_images(test.images)
-    rn34.evaluate(resized_test_images, test.labels)
-
-    # save model
-    rn34.save(save_path)
+    return rn34, history 
 
 def plot_history(history):
     """
@@ -78,26 +89,33 @@ def plot_history(history):
     :param history: training history (keras model output)
     :return: returns nothing
     """
-    DataFrame(history.history).plot(figsize=(8,5))
+    pd.DataFrame(history.history).plot(figsize=(8,5))
     plt.grid(True)
     plt.gca().set_ylim(0,1)
     plt.show()
 
-# TODO: try cut and resize tf
-# TODO: add as preprocessing layer
-def resize_images(images, shape=(224,224)):
+def read_data(file_paths):
     """
-    resizes list of images
+    reads image data from file paths
 
-    :param images: pixel vals of images
-    :param shape: shape images are resized to
-    :return: list of resized images
+    :param file_paths: list of file (image) paths
+    :return: pandas data frame with images & encoded labels
+    :return: label key (dict)
     """
-    resized_images = [] 
-    for image in tqdm(images, desc="Resizing Images"): # progress bar
-        resized_images.append(tf_image.resize(image, shape)) # resizes images (streches)
-    return resized_images
+    images = []
+    file_names = []
+    for file_path in file_paths:
+        images.append(fd.get_image_vals(file_path)) # get image value 
+        file_names.append(fd.format_file_name(file_path)) # get formatted file name 
+    labels, label_key = fd.encode_labels(file_names)
 
+    return pd.DataFrame({'images': images, 'labels': labels}), label_key
+
+
+
+# TODO: add optional arguments -> config 
+# TODO: add plot setting
+# TODO: image_dir 
 def init_args():
     """
     initializes command line args
@@ -114,7 +132,7 @@ def init_args():
 if __name__ == "__main__":
     # executes when train_34.py is run directly 
     args = init_args() # initializes command line args
+    config = confuse.Configuration('ml_skeleton-cls') # reads config file  
     main(train_path=args.train_path,
          test_path=args.test_path,
          save_path=args.save_path)
-     
